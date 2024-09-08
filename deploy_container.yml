@@ -1,0 +1,59 @@
+- hosts: proxmox-server
+  gather_facts: no
+  vars_files:
+    - proxmox_credentials.yml
+    - proxmox_passwords.yml
+  tasks:
+    - name: Authenticate with Proxmox API
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/access/ticket"
+        method: POST
+        body: "username={{ root_user }}&password={{ root_password }}"
+        body_format: form-urlencoded
+        return_content: yes
+        validate_certs: no
+      register: auth_response
+
+    - name: Set Proxmox API auth headers
+      set_fact:
+        proxmox_csrf_token: "{{ auth_response.json.data.CSRFPreventionToken }}"
+        proxmox_auth_cookie: "{{ auth_response.json.data.ticket }}"
+
+    - name: Create the web server container
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        body:
+          vmid: 300
+          ostemplate: "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+          storage: "local-lvm"
+          hostname: "web-server"
+          memory: 4096
+          cores: 2
+          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.150/24,gw=192.168.68.1"
+          ssh-public-keys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        body_format: json
+        validate_certs: no
+
+    - name: Wait for 30 seconds to ensure the container is fully created
+      wait_for:
+        timeout: 30
+
+    - name: Ensure the web server container is started
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/300/status/start"
+        method: POST
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        validate_certs: no
+
+    - name: Wait for the web server to become reachable
+      wait_for:
+        host: 192.168.68.150
+        port: 22
+        timeout: 300
+        state: started
