@@ -3,6 +3,3 @@
 
 # Ignorera alla .log-filer
 *.log
-
-# Ignorera katalogen /tmp
-/tmp/
