@@ -1,0 +1,132 @@
+#### WEB-SERVER-1 ####
+
+- hosts: web-server1
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Flush existing nftables configuration
+      ansible.builtin.shell: |
+        nft flush ruleset || true
+      register: flush_output
+
+    - name: Set up nftables rules on the web server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input ip saddr 192.168.68.190/32 accept  # Tillåt trafik från lastbalanseraren
+        nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
+        nft add rule inet filter input drop
+      register: nftables_output
+
+    - name: Reload nftables configuration
+      ansible.builtin.shell: |
+        nft list ruleset > /etc/nftables.conf
+        systemctl reload nftables
+      when: nftables_output.changed
+
+#### WEB-SERVER-2 ####
+
+- hosts: web-server2
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Flush existing nftables configuration
+      ansible.builtin.shell: |
+        nft flush ruleset || true
+      register: flush_output
+
+    - name: Set up nftables rules on the web server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input ip saddr 192.168.68.190/32 accept  # Tillåt trafik från lastbalanseraren
+        nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
+        nft add rule inet filter input drop
+      register: nftables_output
+
+    - name: Reload nftables configuration
+      ansible.builtin.shell: |
+        nft list ruleset > /etc/nftables.conf
+        systemctl reload nftables
+      when: nftables_output.changed
+
+#### DATABASE ####
+
+- hosts: database-server
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Flush existing nftables configuration
+      ansible.builtin.shell: |
+        nft flush ruleset || true
+      register: flush_output
+
+    - name: Set up nftables rules on the database server
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input ip saddr 192.168.68.150/32 accept
+        nft add rule inet filter input ip saddr 192.168.68.160/32 accept
+        nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
+        nft add rule inet filter input drop
+      register: nftables_output
+
+    - name: Reload nftables configuration
+      ansible.builtin.shell: |
+        nft list ruleset > /etc/nftables.conf
+        systemctl reload nftables
+      when: nftables_output.changed
+
+#### LOAD BALANCER ####
+
+- hosts: load-balancer
+  become: yes
+  tasks:
+    - name: Install nftables
+      apt:
+        name: nftables
+        state: present
+        update_cache: yes
+
+    - name: Flush existing nftables configuration
+      ansible.builtin.shell: |
+        nft flush ruleset || true
+      register: flush_output
+
+    - name: Set up nftables rules on the load balancer
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add rule inet filter input ct state established,related accept
+        nft add rule inet filter input iifname "lo" accept
+        nft add rule inet filter input tcp dport {80, 443} accept  # Tillåt HTTP/HTTPS
+        nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
+        nft add rule inet filter input drop
+      register: nftables_output
+
+    - name: Reload nftables configuration
+      ansible.builtin.shell: |
+        nft list ruleset > /etc/nftables.conf
+        systemctl reload nftables
+      when: nftables_output.changed
