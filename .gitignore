@@ -1,5 +1,0 @@
-# Ignorera .gitattributes
-.gitattributes
-
-# Ignorera alla .log-filer
-*.log
