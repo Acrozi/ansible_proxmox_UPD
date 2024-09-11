@@ -21,6 +21,7 @@
         nft add rule inet filter input ct state established,related accept
         nft add rule inet filter input iifname "lo" accept
         nft add rule inet filter input ip saddr 192.168.68.190/32 accept  # Tillåt trafik från lastbalanseraren
+        nft add rule inet filter input ip saddr 192.168.68.150/32 tcp dport 3306 accept
         nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
         nft add rule inet filter input drop
       register: nftables_output
@@ -54,6 +55,7 @@
         nft add rule inet filter input ct state established,related accept
         nft add rule inet filter input iifname "lo" accept
         nft add rule inet filter input ip saddr 192.168.68.190/32 accept  # Tillåt trafik från lastbalanseraren
+        nft add rule inet filter input ip saddr 192.168.68.160/32 tcp dport 3306 accept
         nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
         nft add rule inet filter input drop
       register: nftables_output

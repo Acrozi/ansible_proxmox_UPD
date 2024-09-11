@@ -3,8 +3,8 @@
 # Skapa Nginx-konfiguration för load balancing
 tee /etc/nginx/sites-available/default > /dev/null <<EOL
 upstream myapp {
-    server 192.168.68.150;
-    server 192.168.68.160;
+    server 192.168.2.10;
+    server 192.168.2.11;
 }
 
 server {

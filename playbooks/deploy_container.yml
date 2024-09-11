@@ -1,8 +1,7 @@
 - hosts: proxmox-server
   gather_facts: no
   vars_files:
-    - proxmox_credentials.yml
-    #- proxmox_passwords.yml
+    - ../credentials/vault.yml
   tasks:
     - name: Authenticate with Proxmox API
       uri:
@@ -19,9 +18,20 @@
         proxmox_csrf_token: "{{ auth_response.json.data.CSRFPreventionToken }}"
         proxmox_auth_cookie: "{{ auth_response.json.data.ticket }}"
 
-######################### container 1 #########################
+    ######################### WEB-SERVER (1) #########################
+    - name: Check if web-server1 container exists
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/300"
+        method: GET
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        return_content: yes
+        validate_certs: no
+      register: web1_check
+      ignore_errors: yes
 
-    - name: Create the web1 server container
+    - name: Create the web-server1 container if it does not exist
       uri:
         url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc"
         method: POST
@@ -35,16 +45,19 @@
           hostname: "web-server1"
           memory: 4096
           cores: 2
-          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.150/24,gw=192.168.68.1"
+          net0: "name=eth0,bridge=vmbr1,ip=192.168.2.10/24,gw=192.168.2.1"  # Private network
           ssh-public-keys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+          rootfs: "local-lvm:20"
         body_format: json
         validate_certs: no
+      when: web1_check.status != 200
 
     - name: Wait for 10 seconds to ensure the container is fully created
       wait_for:
         timeout: 10
+      when: web1_check.status != 200
 
-    - name: Ensure the web server container is started
+    - name: Ensure the web-server1 container is started
       uri:
         url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/300/status/start"
         method: POST
@@ -52,10 +65,22 @@
           Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
           CSRFPreventionToken: "{{ proxmox_csrf_token }}"
         validate_certs: no
+      when: web1_check.status != 200
 
-######################### container 2 #########################
+    ######################### WEB-SERVER (2) #########################
+    - name: Check if web-server2 container exists
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/301"
+        method: GET
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        return_content: yes
+        validate_certs: no
+      register: web2_check
+      ignore_errors: yes
 
-    - name: Create the web2 server container
+    - name: Create the web-server2 container if it does not exist
       uri:
         url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc"
         method: POST
@@ -69,16 +94,19 @@
           hostname: "web-server2"
           memory: 4096
           cores: 2
-          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.160/24,gw=192.168.68.1"
+          net0: "name=eth0,bridge=vmbr1,ip=192.168.2.11/24,gw=192.168.2.1"  # Private network
           ssh-public-keys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+          rootfs: "local-lvm:20"
         body_format: json
         validate_certs: no
+      when: web2_check.status != 200
 
     - name: Wait for 10 seconds to ensure the container is fully created
       wait_for:
         timeout: 10
+      when: web2_check.status != 200
 
-    - name: Ensure the web server container is started
+    - name: Ensure the web-server2 container is started
       uri:
         url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/301/status/start"
         method: POST
@@ -86,18 +114,22 @@
           Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
           CSRFPreventionToken: "{{ proxmox_csrf_token }}"
         validate_certs: no
+      when: web2_check.status != 200
 
+    ######################### DATABAS-SERVER (3) #########################
+    - name: Check if database-server container exists
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/302"
+        method: GET
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        return_content: yes
+        validate_certs: no
+      register: db_check
+      ignore_errors: yes
 
-    # - name: Wait for the web server to become reachable
-    #   wait_for:
-    #     host: 192.168.68.150
-    #     port: 22
-    #     timeout: 300
-    #     state: started
-
-######################### container 3 #########################
-
-    - name: Create the database server container with only private network
+    - name: Create the database server container if it does not exist
       uri:
         url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc"
         method: POST
@@ -111,14 +143,17 @@
           hostname: "database-server"
           memory: 8192
           cores: 4
-          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.170/24,gw=192.168.68.1"
+          net0: "name=eth0,bridge=vmbr1,ip=192.168.2.20/24,gw=192.168.2.1"  # Private network
           ssh-public-keys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+          rootfs: "local-lvm:50"
         body_format: json
         validate_certs: no
+      when: db_check.status != 200
 
     - name: Wait for 20 seconds to ensure the container is fully created
       wait_for:
         timeout: 20
+      when: db_check.status != 200
 
     - name: Ensure the database server container is started
       uri:
@@ -127,18 +162,23 @@
         headers:
           Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
           CSRFPreventionToken: "{{ proxmox_csrf_token }}"
-        validate_certs: false
+        validate_certs: no
+      when: db_check.status != 200
 
-    # - name: Wait for the web server to become reachable
-    #   wait_for:
-    #     host: 192.168.68.170
-    #     port: 22
-    #     timeout: 300
-    #     state: started
+    ######################### LOAD-BALANCER (4) #########################
+    - name: Check if load balancer container exists
+      uri:
+        url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc/303"
+        method: GET
+        headers:
+          Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
+          CSRFPreventionToken: "{{ proxmox_csrf_token }}"
+        return_content: yes
+        validate_certs: no
+      register: lb_check
+      ignore_errors: yes
 
-######################### container 4 #########################
-
-    - name: Create the load balancer container with public and private network
+    - name: Create the load balancer container if it does not exist
       uri:
         url: "https://{{ ansible_host }}:8006/api2/json/nodes/s1/lxc"
         method: POST
@@ -152,15 +192,28 @@
           hostname: "load-balancer"
           memory: 2048
           cores: 2
-          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.190/24,gw=192.168.68.1"
-          net1: "name=eth1,bridge=vmbr0,ip=192.168.2.12/24"
+          net0: "name=eth0,bridge=vmbr0,ip=192.168.68.190/24,gw=192.168.68.1"  # Public network
+          net1: "name=eth1,bridge=vmbr1,ip=192.168.2.12/24,gw=192.168.2.1"  # Private network
           ssh-public-keys: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+          rootfs: "local-lvm:10"
         body_format: json
         validate_certs: no
+      when: lb_check.status != 200
+
+    - name: Copy SSH private key to load balancer
+      copy:
+        src: ~/.ssh/id_rsa
+        dest: /root/.ssh/id_rsa
+        owner: root
+        group: root
+        mode: '0600'
+      delegate_to: 192.168.68.190
+      when: lb_check.status == 200
 
     - name: Wait for 10 seconds to ensure the container is fully created
       wait_for:
         timeout: 10
+      when: lb_check.status != 200
 
     - name: Ensure the load balancer container is started
       uri:
@@ -169,11 +222,5 @@
         headers:
           Cookie: "PVEAuthCookie={{ proxmox_auth_cookie }}"
           CSRFPreventionToken: "{{ proxmox_csrf_token }}"
-        validate_certs: false
-
-    # - name: Wait for the web server to become reachable
-    #   wait_for:
-    #     host: 192.168.68.190
-    #     port: 22
-    #     timeout: 300
-    #     state: started
+        validate_certs: no
+      when: lb_check.status != 200

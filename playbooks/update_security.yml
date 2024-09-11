@@ -1,0 +1,12 @@
+---
+- name: Set up cron job for daily security updates on Ubuntu VMs
+  hosts: web-server1, web-server2, database-server, load-balancer
+  become: yes
+  tasks:
+    - name: Create a cron job to run security updates daily at 2 AM
+      ansible.builtin.cron:
+        name: "Daily security updates"
+        user: "root"
+        minute: "0"
+        hour: "2"
+        job: "apt-get update && apt-get upgrade -y && apt-get dist-upgrade -y && apt-get autoremove -y && apt-get autoclean -y >> /var/log/ansible_security_updates.log 2>&1"

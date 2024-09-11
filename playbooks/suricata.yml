@@ -1,0 +1,72 @@
+- name: Install and configure Suricata for anti-brute force protection
+  hosts: load-balancer
+  become: yes
+  vars:
+    suricata_interface: "eth0"
+
+  tasks:
+    - name: Install Suricata
+      apt:
+        name: suricata
+        state: present
+        update_cache: yes
+
+    - name: Copy suricata.rules to rules directory
+      copy:
+        src: ../suricata-rules/suricata.rules
+        dest: /etc/suricata/rules/suricata.rules
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Add suricata.rules to rule-files in suricata.yaml
+      lineinfile:
+        path: /etc/suricata/suricata.yaml
+        insertafter: '^rule-files:'
+        line: '  - /etc/suricata/rules/suricata.rules'
+
+    - name: Configure af-packet for Suricata
+      blockinfile:
+        path: /etc/suricata/suricata.yaml
+        marker: "# {mark} af-packet settings"
+        block: |
+          af-packet:
+            - interface: {{ suricata_interface }}
+              buffer-size: 8192
+              max-packets: 5000
+              use-mmap: yes
+
+    - name: Restart Suricata to apply changes
+      systemd:
+        name: suricata
+        state: restarted
+        enabled: yes
+
+    - name: Create nftables rule for brute force blocking
+      ansible.builtin.shell: |
+        nft add table inet filter
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+        nft add set inet filter bruteforce_blocklist { type ipv4_addr \; flags timeout \; }
+        nft add rule inet filter input ct state new ip saddr @bruteforce_blocklist drop
+      register: nftables_output
+
+    - name: Reload nftables configuration
+      ansible.builtin.shell: |
+        nft list ruleset > /etc/nftables.conf
+        systemctl reload nftables
+      when: nftables_output.stdout is defined and nftables_output.stdout != ""
+
+    - name: Block IPs detected by Suricata (using script)
+      copy:
+        src: ../scripts/suricata-block.sh
+        dest: /usr/local/bin/suricata-block.sh
+        mode: '0755'
+
+
+    - name: Ensure Suricata blocking script is running
+      cron:
+        name: "Run Suricata brute force blocking script"
+        user: root
+        job: "/usr/local/bin/suricata-block.sh"
+        state: present
+        special_time: reboot

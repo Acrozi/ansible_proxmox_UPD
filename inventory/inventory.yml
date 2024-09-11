@@ -1,0 +1,46 @@
+all:
+  hosts:
+    proxmox-server:
+      ansible_host: 81.230.229.37
+      ansible_user: root
+      ansible_ssh_port: 8022
+      ansible_password: "{{ root_password }}"
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+    load-balancer:
+      ansible_host: 192.168.68.190
+      ansible_user: root
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+    web-server1:
+      ansible_host: 192.168.2.10
+      ansible_user: root
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/id_rsa -W %h:%p root@192.168.68.190"'
+
+    web-server2:
+      ansible_host: 192.168.2.11
+      ansible_user: root
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/id_rsa -W %h:%p root@192.168.68.190"'
+
+    database-server:
+      ansible_host: 192.168.2.20
+      ansible_user: root
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/id_rsa -W %h:%p root@192.168.68.190"'
+
+  children:
+    proxmox:
+      hosts:
+        proxmox-server
+
+    webservers:
+      hosts:
+        web-server1
+        web-server2
+
+    databases:
+      hosts:
+        database-server

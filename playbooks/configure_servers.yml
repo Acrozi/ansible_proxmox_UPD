@@ -1,0 +1,192 @@
+---
+- hosts: web-server1
+  become: true
+  vars_files:
+    - ../credentials/vault.yml
+  tasks:
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: true
+
+    - name: Install PHP and PHP Apache module
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - php
+        - libapache2-mod-php
+
+    - name: Ensure Apache is started
+      systemd:
+        name: apache2
+        state: started
+        enabled: true
+
+    # - name: Wait for 5 seconds
+    #   wait_for:
+    #     timeout: 5
+
+    - name: Synchronize local ./wwwroot-server1 with /var/www/html
+      synchronize:
+        src: ../wwwroot-server1/
+        dest: /var/www/html/
+        rsync_opts:
+          - "--delete"
+        mode: push
+        ssh_args: '-o ProxyJump=root@192.168.68.190'
+
+    - name: Deploy PHP database config file
+      template:
+        src: ../config.php.j2
+        dest: /var/www/html/config.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+- hosts: database-server
+  become: yes
+  vars_files:
+    - ../credentials/vault.yml  # Path to your Vault file
+
+  tasks:
+    - name: Install Python pip
+      apt:
+        name: python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Install PyMySQL via pip
+      pip:
+        name: PyMySQL
+        state: present
+
+    - name: Install MySQL Server
+      apt:
+        name: mysql-server
+        state: present
+        update_cache: yes
+
+    - name: Ensure MySQL is running
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Create MySQL credentials file
+      copy:
+        dest: /root/.my.cnf
+        content: |
+          [client]
+          user=root
+          password={{ mysql_root_password }}
+        mode: '0600'
+
+    - name: Configure MySQL root user to use mysql_native_password
+      mysql_query:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        query: |
+          ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ mysql_root_password }}';
+
+    - name: Flush MySQL privileges
+      mysql_query:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        query: "FLUSH PRIVILEGES;"
+
+    - name: Create a new database
+      mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Create a new MySQL user with privileges
+      mysql_user:
+        name: "{{ db_username }}"
+        password: "{{ db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+
+- hosts: web-server2
+  become: true
+  vars_files:
+    - ../credentials/vault.yml
+  tasks:
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: true
+
+    - name: Install PHP and PHP Apache module
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - php
+        - libapache2-mod-php
+
+    - name: Ensure Apache is started
+      systemd:
+        name: apache2
+        state: started
+        enabled: true
+
+    - name: Wait for 5 seconds
+      wait_for:
+        timeout: 5
+
+    - name: Synchronize local ./wwwroot-server2 with /var/www/html
+      synchronize:
+        src: ../wwwroot-server2/
+        dest: /var/www/html/
+        rsync_opts:
+          - "--delete"
+        mode: push
+        ssh_args: '-o ProxyJump=root@192.168.68.190'
+
+    - name: Deploy PHP database config file
+      template:
+        src: ../config.php.j2
+        dest: /var/www/html/config.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+
+- hosts: load-balancer
+  become: true
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: true
+
+    - name: Ensure Nginx is started
+      systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Wait for 5 seconds
+      wait_for:
+        timeout: 5
+
+    - name: Copy bash script to VM
+      copy:
+        src: ../scripts/setup_loadbalancer.sh
+        dest: /home/setup_loadbalancer.sh
+        mode: '0755'
+
+    - name: Convert DOS line endings to UNIX
+      shell: sed -i 's/\r$//' /home/setup_loadbalancer.sh
+
+    - name: Run bash script on VM
+      shell: "/home/setup_loadbalancer.sh"
