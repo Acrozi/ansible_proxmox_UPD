@@ -4,6 +4,12 @@
   vars_files:
     - ../credentials/vault.yml
   tasks:
+    - name: Create the scripts directory
+      file:
+        path: /home/scripts
+        state: directory
+        mode: '0755'
+
     - name: Install Apache
       apt:
         name: apache2
@@ -17,6 +23,7 @@
       loop:
         - php
         - libapache2-mod-php
+        - php-mysqli  # Install mysqli extension
 
     - name: Ensure Apache is started
       systemd:
@@ -24,9 +31,13 @@
         state: started
         enabled: true
 
-    # - name: Wait for 5 seconds
-    #   wait_for:
-    #     timeout: 5
+    - name: Ensure PHP mysqli extension is enabled
+      lineinfile:
+        path: /etc/php/8.1/apache2/php.ini
+        regexp: '^;?extension=mysqli'
+        line: 'extension=mysqli'
+        create: yes
+        state: present
 
     - name: Synchronize local ./wwwroot-server1 with /var/www/html
       synchronize:
@@ -39,18 +50,36 @@
 
     - name: Deploy PHP database config file
       template:
-        src: ../config.php.j2
+        src: ../j2/config.php.j2
         dest: /var/www/html/config.php
         owner: www-data
         group: www-data
         mode: '0644'
 
+    - name: Copy snapshot script to VM
+      copy:
+        src: ../scripts/snapshots.sh
+        dest: /home/scripts/snapshots.sh
+        mode: '0755'
+
+    - name: Schedule snapshot script to run daily at 01:00
+      cron:
+        name: "Run Proxmox snapshot script"
+        minute: "0"
+        hour: "1"
+        job: "/bin/bash /home/scripts/snapshots.sh"
+
 - hosts: database-server
   become: yes
   vars_files:
-    - ../credentials/vault.yml  # Path to your Vault file
-
+    - ../credentials/vault.yml
   tasks:
+    - name: Create the scripts directory
+      file:
+        path: /home/scripts
+        state: directory
+        mode: '0755'
+
     - name: Install Python pip
       apt:
         name: python3-pip
@@ -112,12 +141,30 @@
         login_user: root
         login_password: "{{ mysql_root_password }}"
 
+    - name: Copy snapshot script to VM
+      copy:
+        src: ../scripts/snapshots.sh
+        dest: /home/scripts/snapshots.sh
+        mode: '0755'
+
+    - name: Schedule snapshot script to run daily at 01:00
+      cron:
+        name: "Run Proxmox snapshot script"
+        minute: "0"
+        hour: "1"
+        job: "/bin/bash /home/scripts/snapshots.sh"
 
 - hosts: web-server2
   become: true
   vars_files:
     - ../credentials/vault.yml
   tasks:
+    - name: Create the scripts directory
+      file:
+        path: /home/scripts
+        state: directory
+        mode: '0755'
+
     - name: Install Apache
       apt:
         name: apache2
@@ -131,6 +178,7 @@
       loop:
         - php
         - libapache2-mod-php
+        - php-mysqli  # Install mysqli extension
 
     - name: Ensure Apache is started
       systemd:
@@ -141,6 +189,14 @@
     - name: Wait for 5 seconds
       wait_for:
         timeout: 5
+
+    - name: Ensure PHP mysqli extension is enabled
+      lineinfile:
+        path: /etc/php/8.1/apache2/php.ini
+        regexp: '^;?extension=mysqli'
+        line: 'extension=mysqli'
+        create: yes
+        state: present
 
     - name: Synchronize local ./wwwroot-server2 with /var/www/html
       synchronize:
@@ -153,16 +209,34 @@
 
     - name: Deploy PHP database config file
       template:
-        src: ../config.php.j2
+        src: ../j2/config.php.j2
         dest: /var/www/html/config.php
         owner: www-data
         group: www-data
         mode: '0644'
 
+    - name: Copy snapshot script to VM
+      copy:
+        src: ../scripts/snapshots.sh
+        dest: /home/scripts/snapshots.sh
+        mode: '0755'
+
+    - name: Schedule snapshot script to run daily at 01:00
+      cron:
+        name: "Run Proxmox snapshot script"
+        minute: "0"
+        hour: "1"
+        job: "/bin/bash /home/scripts/snapshots.sh"
 
 - hosts: load-balancer
   become: true
   tasks:
+    - name: Create the scripts directory
+      file:
+        path: /home/scripts
+        state: directory
+        mode: '0755'
+
     - name: Install Nginx
       apt:
         name: nginx
@@ -182,11 +256,24 @@
     - name: Copy bash script to VM
       copy:
         src: ../scripts/setup_loadbalancer.sh
-        dest: /home/setup_loadbalancer.sh
+        dest: /home/scripts/setup_loadbalancer.sh
         mode: '0755'
 
     - name: Convert DOS line endings to UNIX
-      shell: sed -i 's/\r$//' /home/setup_loadbalancer.sh
+      shell: sed -i 's/\r$//' /home/scripts/setup_loadbalancer.sh
 
     - name: Run bash script on VM
-      shell: "/home/setup_loadbalancer.sh"
+      shell: "/home/scripts/setup_loadbalancer.sh"
+
+    - name: Copy snapshot script to VM
+      copy:
+        src: ../scripts/snapshots.sh
+        dest: /home/scripts/snapshots.sh
+        mode: '0755'
+
+    - name: Schedule snapshot script to run daily at 01:00
+      cron:
+        name: "Run Proxmox snapshot script"
+        minute: "0"
+        hour: "1"
+        job: "/bin/bash /home/scripts/snapshots.sh"

@@ -20,8 +20,8 @@
         nft add chain inet filter input { type filter hook input priority 0 \; }
         nft add rule inet filter input ct state established,related accept
         nft add rule inet filter input iifname "lo" accept
-        nft add rule inet filter input ip saddr 192.168.68.190/32 accept  # Tillåt trafik från lastbalanseraren
-        nft add rule inet filter input ip saddr 192.168.68.150/32 tcp dport 3306 accept
+        nft add rule inet filter input ip saddr 192.168.2.12/32 accept  # Tillåt trafik från lastbalanseraren
+        nft add rule inet filter input ip saddr 192.168.2.20/32 tcp dport 3306 accept # Till databasen
         nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
         nft add rule inet filter input drop
       register: nftables_output
@@ -54,8 +54,8 @@
         nft add chain inet filter input { type filter hook input priority 0 \; }
         nft add rule inet filter input ct state established,related accept
         nft add rule inet filter input iifname "lo" accept
-        nft add rule inet filter input ip saddr 192.168.68.190/32 accept  # Tillåt trafik från lastbalanseraren
-        nft add rule inet filter input ip saddr 192.168.68.160/32 tcp dport 3306 accept
+        nft add rule inet filter input ip saddr 192.168.2.12/32 accept  # Tillåt trafik från lastbalanseraren
+        nft add rule inet filter input ip saddr 192.168.2.20/32 tcp dport 3306 accept
         nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
         nft add rule inet filter input drop
       register: nftables_output
@@ -88,9 +88,10 @@
         nft add chain inet filter input { type filter hook input priority 0 \; }
         nft add rule inet filter input ct state established,related accept
         nft add rule inet filter input iifname "lo" accept
-        nft add rule inet filter input ip saddr 192.168.68.150/32 accept
-        nft add rule inet filter input ip saddr 192.168.68.160/32 accept
+        nft add rule inet filter input ip saddr 192.168.2.10/32 accept
+        nft add rule inet filter input ip saddr 192.168.2.11/32 accept
         nft add rule inet filter input tcp dport 22 accept  # Tillåt SSH
+        nft add rule inet filter input tcp dport 3306 accept  # Tillåt MySQL
         nft add rule inet filter input drop
       register: nftables_output
 

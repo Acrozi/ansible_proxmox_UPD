@@ -1,0 +1,12 @@
+- hosts: load-balancer
+  become: yes
+  tasks:
+    - name: Copy SSH private key to load balancer
+      copy:
+        src: ../ssh-keys/id_rsa
+        dest: /root/.ssh/id_rsa
+        owner: root
+        group: root
+        mode: '0600'
+        #delegate_to: 192.168.68.190
+      # when: lb_check.status == 200
